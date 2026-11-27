@@ -14,7 +14,6 @@ const POINTS = join(REPO, 'scripts/local/points-json.sh')
 const SUMMARY = join(REPO, 'scripts/local/points-summary.sh')
 const HEALTH = join(REPO, 'scripts/local/health-json.sh')
 const ACCOUNTS = join(REPO, 'scripts/local/accounts-list.sh')
-const ACCOUNT_ADD = join(REPO, 'scripts/local/account-add.sh')
 const ACCOUNT_REMOVE = join(REPO, 'scripts/local/account-remove.sh')
 const PARALLEL_SET = join(REPO, 'scripts/local/parallel-set.sh')
 
@@ -233,19 +232,20 @@ export function apply(ctx) {
               { type: 'metric', label: zh ? '总余额' : 'Balance', value: { $: 'data.totalBal' }, caption: zh ? '两账号合计' : 'both accounts' },
             ] },
 
+            // 账号抽屉：点邮箱行展开详情，避免每个账号占两大块
+            { type: 'accordion', items: [
+              { label: zh ? '账号一 · 点击展开明细' : 'Account 1 · tap for details', children: [
+                { type: 'text', text: { $: 'data.a0name' }, style: { size: 'caption', weight: 'semibold' } },
+                { type: 'keyValue', items: { $: 'data.a0kv' } },
+              ] },
+              { label: zh ? '账号二 · 点击展开明细' : 'Account 2 · tap for details', children: [
+                { type: 'text', text: { $: 'data.a1name' }, style: { size: 'caption', weight: 'semibold' } },
+                { type: 'keyValue', items: { $: 'data.a1kv' } },
+              ] },
+            ] },
+
             // 分组明细
             { type: 'accordion', expanded: true, items: [
-              { label: zh ? '账户概览' : 'Accounts', children: [
-                { type: 'compare', items: { $: 'data.compareItems' } },
-                { type: 'stack', style: { card: 'outlined', gap: 'S', padding: 'M' }, children: [
-                  { type: 'text', text: { $: 'data.a0name' }, style: { size: 'caption', weight: 'semibold' } },
-                  { type: 'keyValue', items: { $: 'data.a0kv' } },
-                ] },
-                { type: 'stack', style: { card: 'outlined', gap: 'S', padding: 'M' }, children: [
-                  { type: 'text', text: { $: 'data.a1name' }, style: { size: 'caption', weight: 'semibold' } },
-                  { type: 'keyValue', items: { $: 'data.a1kv' } },
-                ] },
-              ] },
               { label: zh ? '最近得分明细' : 'Recent points', children: [
                 { type: 'table', columns: [zh ? '时间' : 'Time', zh ? '账号' : 'Account', zh ? '项目' : 'Item', zh ? '得分' : 'Pts', zh ? '余额' : 'Bal'], rows: { $: 'data.rows' } },
               ] },
@@ -277,7 +277,6 @@ export function apply(ctx) {
                 { type: 'text', text: zh ? '选择账号删除（配置自动备份，可恢复）' : 'Select an account to remove (backed up)', style: { size: 'caption' }, tone: 'muted' },
                 { type: 'options', id: 'remove-account', options: { $: 'data.removeOptions' } },
                 { type: 'actions', items: [
-                  { label: zh ? '添加账号' : 'Add', action: 'add-account', icon: 'add' },
                   { label: '串行', action: 'set-parallel', args: { n: 1 } },
                   { label: '并行 2', action: 'set-parallel', args: { n: 2 } },
                   { label: '并行 3', action: 'set-parallel', args: { n: 3 } },
@@ -347,15 +346,6 @@ export function apply(ctx) {
             return { refresh: true, toast: `已切换为${n <= 1 ? '串行' : '并行 ' + n}` }
           } catch (err) {
             return { toast: `切换失败：${String(err?.stderr || err?.message || '').slice(0, 40)}` }
-          }
-        },
-        'add-account': () => {
-          try {
-            const out = execFileSync('bash', [ACCOUNT_ADD, 'prepare'], { encoding: 'utf8', timeout: 10000 })
-            const m = /编号 (\d+)/.exec(out)
-            return { refresh: true, toast: `已建账号 ${m ? m[1] : '?'} 空白配置` }
-          } catch (err) {
-            return { toast: `准备失败：${String(err?.stderr || err?.message || '').slice(0, 40)}` }
           }
         },
       },
