@@ -66,8 +66,11 @@ done
 echo
 echo "【错误】"
 errs=$(grep -c '\[ERROR\]' "$LOG" || true)
-echo "  ERROR 条数: $errs"
-grep '\[ERROR\]' "$LOG" | tail -5 | sed 's/^/    /' | cut -c1-150
+benign=$(grep '\[ERROR\]' "$LOG" | grep -c '签到未确认到账' || true)
+real=$((errs - benign)); [ "$real" -lt 0 ] && real=0
+echo "  ERROR 条数: $errs（其中签到重复等良性 $benign 条，实际需关注 $real 条）"
+grep '\[ERROR\]' "$LOG" | grep -v '签到未确认到账' | tail -5 | sed 's/^/    /' | cut -c1-150
+[ "$benign" -gt 0 ] && echo "    （另有 $benign 条「签到未确认到账」为已到账后的重复尝试，非失败）"
 
 echo
 echo "【风控信号】"

@@ -262,6 +262,29 @@ docker compose restart          # 重启（不重建）
 
 配套 Web 面板推荐 [Rewards Dashboard](https://github.com/mgrimace/rewards-dashboard)，可管理运行、账户、调度、日志、积分。
 
+### 📱 在 DSH Go 手机 App 上安装原生面板（本机部署专用）
+
+本项目在手机上用 DSH Go 的 Ubuntu 环境运行时，附带一个**原生插件**，可在 App 里提供「启动积分 / 停止积分」胶囊和「积分明细」面板（今日得分、账号余额、最近明细、日月汇总、风控、运行状态），无需开终端、不经过 AI。
+
+安装步骤（在 DSH Go 的终端里执行）：
+
+```bash
+# 1. 克隆本仓库到手机（或把仓库放进工作区），记下路径，例如 /root/workspace/DSH-Go-Bing-Rewards
+git clone https://github.com/Sezario1231/DSH-Go-Bing-Rewards.git
+
+# 2. 安装 dsh-go 原生插件（profile 固定为 web）
+dsh plugin --profile web add /root/workspace/DSH-Go-Bing-Rewards/dsh-plugin/local-msr-start
+
+# 3. 若 App 提示需要重启引擎，到「引擎」页点一次重启
+```
+
+装好后：
+- 输入框上方出现「启动积分 / 停止积分」胶囊，点一下即执行，不调用 AI。
+- 「全部功能」里出现「积分明细」面板，默认每 15 秒自动刷新。
+- 面板顶部的健康卡显示今日是否已跑完 / 运行中 / 可能漏跑，并可一键启动、停止、刷新。
+
+> 注意：本插件读取的是本机脚本（`scripts/local/*.sh`）和日志（`logs/cron-*.log`）。要先按「快速开始 / 部署」章节配好 `.env` 并跑过一次，面板才会显示数据。首次运行的手动登录、2FA、验证码仍需在手机浏览器里完成。
+
 ---
 
 ## ⚙️ 配置参考

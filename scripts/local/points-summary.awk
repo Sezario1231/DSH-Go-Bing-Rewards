@@ -64,7 +64,9 @@ function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
         riskChecks[key]++
     }
     if (line ~ /需要用户登录|请登录|需要人工验证|检测到了验证码|passkey 验证/) risk[key SUBSEP "login"]++
-    if (line ~ /\[ERROR\]/) { risk[key SUBSEP "error"]++; risk[mkey SUBSEP "error"]++ }
+    # 良性签到重复（已到账后的重试）不计入错误数；真失败（checkin=0）仍由签到得分为 0 反映
+    if (line ~ /\[ERROR\]/ && line ~ /签到未确认到账/) benign[key]++
+    else if (line ~ /\[ERROR\]/) { risk[key SUBSEP "error"]++; risk[mkey SUBSEP "error"]++ }
 }
 function dumpDays(  i,k,a,d,first,last,cat, arr,firstf) {
     printf "["
@@ -75,7 +77,10 @@ function dumpDays(  i,k,a,d,first,last,cat, arr,firstf) {
         first = dFirst[k]; last = dLast[k]
         printf "{\"date\":\"%s\",\"account\":\"%s\",\"start\":%d,\"now\":%d,\"delta\":%d,", d, a, first, last, last-first
         printf "\"search\":%d,\"read\":%d,\"checkin\":%d,\"other\":%d,", dsum[k SUBSEP "search"], dsum[k SUBSEP "read"], dsum[k SUBSEP "checkin"], dsum[k SUBSEP "other"]
-        printf "\"errors\":%d,\"restricted\":%d,\"bot\":%d,\"fold\":%d,\"warn\":%d,\"login\":%d,\"checks\":%d}", risk[k SUBSEP "error"]+0, risk[k SUBSEP "restricted"]+0, risk[k SUBSEP "bot"]+0, risk[k SUBSEP "fold"]+0, risk[k SUBSEP "warn"]+0, risk[k SUBSEP "login"]+0, riskChecks[k]+0
+        eff_err = risk[k SUBSEP "error"] + 0
+        if (dsum[k SUBSEP "checkin"] > 0 && benign[k] > 0) eff_err -= benign[k]
+        if (eff_err < 0) eff_err = 0
+        printf "\"errors\":%d,\"restricted\":%d,\"bot\":%d,\"fold\":%d,\"warn\":%d,\"login\":%d,\"checks\":%d}", eff_err, risk[k SUBSEP "restricted"]+0, risk[k SUBSEP "bot"]+0, risk[k SUBSEP "fold"]+0, risk[k SUBSEP "warn"]+0, risk[k SUBSEP "login"]+0, riskChecks[k]+0
     }
     print "]"
 }

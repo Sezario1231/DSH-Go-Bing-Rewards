@@ -9,11 +9,25 @@ export const name = 'local-msr-start'
 // <repo>/dsh-plugin/local-msr-start/lib/index.js -> repo = 上溯三级
 const REPO = dirname(dirname(dirname(dirname(fileURLToPath(import.meta.url)))))
 const START = join(REPO, 'scripts/local/start.sh')
+const STOP = join(REPO, 'scripts/local/stop-scheduler.sh')
 const POINTS = join(REPO, 'scripts/local/points-json.sh')
 const SUMMARY = join(REPO, 'scripts/local/points-summary.sh')
+const HEALTH = join(REPO, 'scripts/local/health-json.sh')
 
 const STATUS = { done: ['已完成', 'good'], running: ['运行中', 'info'], pending: ['未开始', 'muted'] }
 const CAT = { search: '搜索', checkin: '签到', read: '阅读', other: '其他' }
+
+function readHealth() {
+  try {
+    const out = execFileSync('bash', [HEALTH], {
+      encoding: 'utf8', timeout: 10000,
+      env: { ...process.env, TZ: 'Asia/Shanghai' },
+    })
+    return JSON.parse(out.trim())
+  } catch {
+    return { status: 'unknown', label: '状态未知', tone: 'muted', detail: '健康检测脚本读取失败' }
+  }
+}
 
 function readPoints() {
   try {
@@ -82,6 +96,9 @@ function readPoints() {
       ['最后活动', nz(a.lastTs)],
     ]
 
+    const h = readHealth()
+    const hIcon = { done: '✅', running: '⏳', interrupted: '⚠️', missed: '🔴', pending: '🕒' }[h.status] || 'ℹ️'
+
     return {
       date: d.date || '',
       totalToday: fmt(totalToday),
@@ -96,10 +113,15 @@ function readPoints() {
       a1tone: (STATUS[a1.status] || ['—', 'muted'])[1],
       rows,
       dayRows, monthRows, risk0, risk1,
+      health: h,
+      healthText: `${hIcon} ${h.label}`,
+      healthTone: h.tone || 'muted',
+      healthDetail: h.detail || '',
       updated: new Date().toLocaleTimeString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }),
     }
   } catch {
-    return { date: '', totalToday: '—', totalBal: '—', a0kv: [], a1kv: [], rows: [], updated: '读取失败' }
+    return { date: '', totalToday: '—', totalBal: '—', a0kv: [], a1kv: [], rows: [],
+      healthText: 'ℹ️ 状态未知', healthTone: 'muted', healthDetail: '健康检测读取失败', updated: '读取失败' }
   }
 }
 
@@ -120,6 +142,19 @@ export function apply(ctx) {
       }
     })
 
+    ctx.dshGo.on('stop-rewards', (scope, event) => {
+      const zh = !String(event?.locale || '').startsWith('en')
+      try {
+        const out = execFileSync('bash', [STOP], {
+          encoding: 'utf8', timeout: 15000,
+        })
+        return { toast: zh ? `已停止（${(out || '').trim().slice(0, 30)}）` : `Stopped (${(out || '').trim().slice(0, 30)})` }
+      } catch (err) {
+        const msg = String(err?.stderr || err?.message || '').slice(0, 60)
+        return { toast: zh ? `停止失败：${msg}` : `Failed: ${msg}` }
+      }
+    })
+
     ctx.dshGo.panel('points-board', {
       view: (scope, caps) => {
         const zh = !String(caps?.locale || '').startsWith('en')
@@ -127,6 +162,13 @@ export function apply(ctx) {
           v: 2, type: 'stack', title: zh ? '积分明细' : 'Points', accent: 'teal',
           children: [
             { type: 'text', text: { $: 'data.date' }, style: { size: 'caption' } },
+            { type: 'callout', text: { $: 'data.healthText' }, tone: { $: 'data.healthTone' } },
+            { type: 'text', text: { $: 'data.healthDetail' }, style: { size: 'caption' } },
+            { type: 'actions', items: [
+              { label: zh ? '启动积分' : 'Start', action: 'start', icon: 'play' },
+              { label: zh ? '停止' : 'Stop', action: 'stop', icon: 'stop' },
+              { label: zh ? '刷新' : 'Refresh', action: 'refresh', icon: 'refresh' },
+            ] },
             { type: 'row', children: [
               { type: 'metric', label: zh ? '今日新增' : 'Today', value: { $: 'data.totalToday' }, tone: 'good' },
               { type: 'metric', label: zh ? '总余额' : 'Balance', value: { $: 'data.totalBal' } },
@@ -171,6 +213,22 @@ export function apply(ctx) {
       },
       actions: {
         refresh: () => ({ refresh: true, toast: '已刷新' }),
+        start: () => {
+          try {
+            const out = execFileSync('bash', [START], { encoding: 'utf8', timeout: 15000 })
+            return { refresh: true, toast: (out || '').trim().slice(0, 60) || '已启动积分' }
+          } catch {
+            return { refresh: true, toast: '启动失败，请查看日志' }
+          }
+        },
+        stop: () => {
+          try {
+            const out = execFileSync('bash', [STOP], { encoding: 'utf8', timeout: 15000 })
+            return { refresh: true, toast: (out || '').trim().slice(0, 60) || '已停止' }
+          } catch {
+            return { refresh: true, toast: '停止失败，请手动检查' }
+          }
+        },
       },
     })
   })
