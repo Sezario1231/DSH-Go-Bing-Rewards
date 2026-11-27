@@ -1,0 +1,28 @@
+{
+  "name": "local-msr-start",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
+  "dshGo": {
+    "v": 1,
+    "title": { "zh": "积分助手", "en": "Rewards" },
+    "icon": "chart",
+    "contributes": {
+      "composer.actions": [
+        { "id": "start-rewards", "label": { "zh": "启动积分", "en": "Start" }, "icon": "play" }
+      ],
+      "panels": [
+        { "id": "points-board", "title": { "zh": "积分明细", "en": "Points" }, "icon": "chart", "placement": ["features"] }
+      ]
+    }
+  }
+}

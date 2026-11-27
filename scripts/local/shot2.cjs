@@ -1,0 +1,11 @@
+const { chromium } = require('patchright')
+;(async () => {
+  const b = await chromium.launch({ headless: false, args: ['--no-sandbox', '--disable-dev-shm-usage', '--window-size=412,915'] })
+  const p = await b.newPage({ viewport: { width: 412, height: 915 } })
+  await p.goto('https://rewards.bing.com/auth/login', { waitUntil: 'domcontentloaded', timeout: 60000 })
+  await p.waitForTimeout(5000)
+  await p.screenshot({ path: 'logs/shots/login-page.png', timeout: 20000 })
+  console.log('URL:', p.url())
+  console.log('TITLE:', await p.title())
+  await b.close()
+})().catch(e => { console.error('FAIL', e.message.split('\n')[0]); process.exit(1) })
