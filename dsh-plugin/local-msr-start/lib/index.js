@@ -13,6 +13,10 @@ const STOP = join(REPO, 'scripts/local/stop-scheduler.sh')
 const POINTS = join(REPO, 'scripts/local/points-json.sh')
 const SUMMARY = join(REPO, 'scripts/local/points-summary.sh')
 const HEALTH = join(REPO, 'scripts/local/health-json.sh')
+const ACCOUNTS = join(REPO, 'scripts/local/accounts-list.sh')
+const ACCOUNT_ADD = join(REPO, 'scripts/local/account-add.sh')
+const ACCOUNT_REMOVE = join(REPO, 'scripts/local/account-remove.sh')
+const PARALLEL_SET = join(REPO, 'scripts/local/parallel-set.sh')
 
 const STATUS = { done: ['已完成', 'good'], running: ['运行中', 'info'], pending: ['未开始', 'muted'] }
 const CAT = { search: '搜索', checkin: '签到', read: '阅读', other: '其他' }
@@ -26,6 +30,25 @@ function readHealth() {
     return JSON.parse(out.trim())
   } catch {
     return { status: 'unknown', label: '状态未知', tone: 'muted', detail: '健康检测脚本读取失败' }
+  }
+}
+
+function readAccounts() {
+  try {
+    const out = execFileSync('bash', [ACCOUNTS], { encoding: 'utf8', timeout: 10000 })
+    return JSON.parse(out.trim())
+  } catch {
+    return []
+  }
+}
+
+function readClusters() {
+  try {
+    const out = execFileSync(PARALLEL_SET, { encoding: 'utf8', timeout: 10000 })
+    const m = /clusters=(\d+)/.exec(out)
+    return m ? Number(m[1]) : 1
+  } catch {
+    return 1
   }
 }
 
@@ -138,13 +161,15 @@ function readPoints() {
       compareItems,
       riskBadge0: rkBadge(risk0),
       riskBadge1: rkBadge(risk1),
+      accounts: readAccounts(),
+      clusters: readClusters(),
       updated: new Date().toLocaleTimeString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }),
     }
   } catch {
     return { date: '', totalToday: '—', totalBal: '—', a0kv: [], a1kv: [], rows: [],
       healthText: '状态未知', healthTone: 'muted', healthDetail: '健康检测读取失败',
       compareItems: [], riskBadge0: { text: '—', tone: 'muted' }, riskBadge1: { text: '—', tone: 'muted' },
-      updated: '读取失败' }
+      accounts: [], clusters: 1, updated: '读取失败' }
   }
 }
 
@@ -244,6 +269,21 @@ export function apply(ctx) {
                 { type: 'keyValue', items: { $: 'data.risk1' } },
                 { type: 'text', text: zh ? '仅记录，不阻断自动运行' : 'Record only; never blocks automation', style: { size: 'caption' }, tone: 'muted' },
               ] },
+              { label: zh ? '账号管理' : 'Manage accounts', children: [
+                { type: 'keyValue', items: [
+                  [zh ? '运行模式' : 'Mode', { $: 'data.modeText' }],
+                ] },
+                { type: 'table', columns: [zh ? '编号' : 'No.', zh ? '邮箱' : 'Email', zh ? '状态' : 'State'], rows: { $: 'data.accountTable' } },
+                { type: 'text', text: zh ? '选择账号删除（配置自动备份，可恢复）' : 'Select an account to remove (backed up)', style: { size: 'caption' }, tone: 'muted' },
+                { type: 'options', id: 'remove-account', options: { $: 'data.removeOptions' } },
+                { type: 'actions', items: [
+                  { label: zh ? '添加账号' : 'Add', action: 'add-account', icon: 'add' },
+                  { label: '串行', action: 'set-parallel', args: { n: 1 } },
+                  { label: '并行 2', action: 'set-parallel', args: { n: 2 } },
+                  { label: '并行 3', action: 'set-parallel', args: { n: 3 } },
+                ] },
+                { type: 'text', text: zh ? '建议并行不超过 3、账号总数不超过 6' : 'Recommended: parallel ≤ 3, accounts ≤ 6', style: { size: 'caption' }, tone: 'muted' },
+              ] },
               { label: zh ? '运行状态' : 'Status', children: [
                 { type: 'text', text: { $: 'data.updated' }, style: { size: 'caption' }, tone: 'muted' },
                 { type: 'actions', items: [{ label: zh ? '立即刷新' : 'Refresh', action: 'refresh', icon: 'refresh' }] },
@@ -253,7 +293,21 @@ export function apply(ctx) {
         }
       },
       data: (scope, emit, caps) => {
-        const tick = () => emit(readPoints())
+        const tick = () => {
+          const d = readPoints()
+          const zh = !String(caps?.locale || '').startsWith('en')
+          d.accountTable = (d.accounts || []).map((a) => [
+            a.index,
+            a.email || '—',
+            a.active ? (zh ? '启用' : 'on') : (zh ? '已删除' : 'off'),
+          ])
+          d.modeText = d.clusters <= 1
+            ? (zh ? '串行（逐个运行）' : 'Serial')
+            : (zh ? `并行（最多 ${d.clusters} 个）` : `Parallel (${d.clusters})`)
+          d.removeOptions = (d.accounts || []).filter((a) => a.active)
+            .map((a) => ({ label: `${a.index} · ${a.email}`, value: a.index }))
+          emit(d)
+        }
         tick()
         const timer = setInterval(tick, 15000)
         return () => clearInterval(timer)
@@ -274,6 +328,34 @@ export function apply(ctx) {
             return { refresh: true, toast: (out || '').trim().slice(0, 60) || '已停止' }
           } catch {
             return { refresh: true, toast: '停止失败，请手动检查' }
+          }
+        },
+        'remove-account': (_scope, event) => {
+          const idx = String(event?.value ?? event?.args?.index ?? '')
+          if (!/^\d+$/.test(idx)) return { toast: '请选择要删除的账号' }
+          try {
+            execFileSync('bash', [ACCOUNT_REMOVE, idx], { encoding: 'utf8', timeout: 10000 })
+            return { refresh: true, toast: `已删除账号 ${idx}（配置已备份）` }
+          } catch (err) {
+            return { toast: `删除失败：${String(err?.stderr || err?.message || '').slice(0, 40)}` }
+          }
+        },
+        'set-parallel': (_scope, event) => {
+          const n = Number(event?.value?.n ?? event?.args?.n ?? 1)
+          try {
+            execFileSync(PARALLEL_SET, [String(n)], { encoding: 'utf8', timeout: 10000 })
+            return { refresh: true, toast: `已切换为${n <= 1 ? '串行' : '并行 ' + n}` }
+          } catch (err) {
+            return { toast: `切换失败：${String(err?.stderr || err?.message || '').slice(0, 40)}` }
+          }
+        },
+        'add-account': () => {
+          try {
+            const out = execFileSync('bash', [ACCOUNT_ADD, 'prepare'], { encoding: 'utf8', timeout: 10000 })
+            const m = /编号 (\d+)/.exec(out)
+            return { refresh: true, toast: `已建账号 ${m ? m[1] : '?'} 空白配置` }
+          } catch (err) {
+            return { toast: `准备失败：${String(err?.stderr || err?.message || '').slice(0, 40)}` }
           }
         },
       },
