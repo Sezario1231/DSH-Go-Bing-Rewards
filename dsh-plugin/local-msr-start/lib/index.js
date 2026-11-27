@@ -97,7 +97,6 @@ function readPoints() {
     ]
 
     const h = readHealth()
-    const hIcon = { done: '✅', running: '⏳', interrupted: '⚠️', missed: '🔴', pending: '🕒' }[h.status] || 'ℹ️'
 
     // 两账号对比卡（原生 compare 风格）
     const cmpItem = (a, label) => ({
@@ -133,7 +132,7 @@ function readPoints() {
       rows,
       dayRows, monthRows, risk0, risk1,
       health: h,
-      healthText: `${hIcon} ${h.label}`,
+      healthText: h.label,
       healthTone: h.tone || 'muted',
       healthDetail: h.detail || '',
       compareItems,
@@ -143,7 +142,7 @@ function readPoints() {
     }
   } catch {
     return { date: '', totalToday: '—', totalBal: '—', a0kv: [], a1kv: [], rows: [],
-      healthText: 'ℹ️ 状态未知', healthTone: 'muted', healthDetail: '健康检测读取失败',
+      healthText: '状态未知', healthTone: 'muted', healthDetail: '健康检测读取失败',
       compareItems: [], riskBadge0: { text: '—', tone: 'muted' }, riskBadge1: { text: '—', tone: 'muted' },
       updated: '读取失败' }
   }
@@ -159,7 +158,7 @@ export function apply(ctx) {
           env: { ...process.env, TZ: 'Asia/Shanghai' },
         })
         if (out.includes('已在运行')) return { toast: zh ? '积分任务已在运行中' : 'Already running' }
-        return { toast: zh ? '✅ 积分任务已启动' : '✅ Started' }
+        return { toast: zh ? '积分任务已启动' : 'Started' }
       } catch (err) {
         const msg = String(err?.stderr || err?.message || '').slice(0, 60)
         return { toast: zh ? `启动失败：${msg}` : `Failed: ${msg}` }
@@ -211,7 +210,7 @@ export function apply(ctx) {
 
             // 分组明细
             { type: 'accordion', expanded: true, items: [
-              { label: zh ? '📊 账号对比' : '📊 Accounts', children: [
+              { label: zh ? '账户概览' : 'Accounts', children: [
                 { type: 'compare', items: { $: 'data.compareItems' } },
                 { type: 'stack', style: { card: 'outlined', gap: 'S', padding: 'M' }, children: [
                   { type: 'text', text: { $: 'data.a0name' }, style: { size: 'caption', weight: 'semibold' } },
@@ -222,17 +221,17 @@ export function apply(ctx) {
                   { type: 'keyValue', items: { $: 'data.a1kv' } },
                 ] },
               ] },
-              { label: zh ? '📋 最近得分' : '📋 Recent points', children: [
+              { label: zh ? '最近得分明细' : 'Recent points', children: [
                 { type: 'table', columns: [zh ? '时间' : 'Time', zh ? '账号' : 'Account', zh ? '项目' : 'Item', zh ? '得分' : 'Pts', zh ? '余额' : 'Bal'], rows: { $: 'data.rows' } },
               ] },
-              { label: zh ? '📅 近几天' : '📅 Daily', children: [
+              { label: zh ? '每日明细' : 'Daily', children: [
                 { type: 'table', columns: [zh ? '日期' : 'Date', zh ? '账号' : 'Account', zh ? '新增' : 'Gain', zh ? '搜/读/签' : 'S/R/C', zh ? '错' : 'Err'], rows: { $: 'data.dayRows' } },
                 { type: 'text', text: zh ? '分类为日志统计，仅供参考；新增以余额差为准' : 'Categories from logs; gain = balance diff', style: { size: 'caption' }, tone: 'muted' },
               ] },
-              { label: zh ? '🗓️ 月明细' : '🗓️ Monthly', children: [
+              { label: zh ? '月度明细' : 'Monthly', children: [
                 { type: 'table', columns: [zh ? '月份' : 'Month', zh ? '账号' : 'Account', zh ? '新增' : 'Gain', zh ? '搜/读/签' : 'S/R/C'], rows: { $: 'data.monthRows' } },
               ] },
-              { label: zh ? '🛡️ 风控情况' : '🛡️ Risk', children: [
+              { label: zh ? '风控监测' : 'Risk monitor', children: [
                 { type: 'row', children: [
                   { type: 'text', text: zh ? '账号一' : 'Account 1', style: { size: 'caption', weight: 'semibold' } },
                   { type: 'text', text: { $: 'data.riskBadge0.text' }, tone: { $: 'data.riskBadge0.tone' }, style: { size: 'caption' } },
@@ -245,7 +244,7 @@ export function apply(ctx) {
                 { type: 'keyValue', items: { $: 'data.risk1' } },
                 { type: 'text', text: zh ? '仅记录，不阻断自动运行' : 'Record only; never blocks automation', style: { size: 'caption' }, tone: 'muted' },
               ] },
-              { label: zh ? '⚙️ 运行状态' : '⚙️ Status', children: [
+              { label: zh ? '运行状态' : 'Status', children: [
                 { type: 'text', text: { $: 'data.updated' }, style: { size: 'caption' }, tone: 'muted' },
                 { type: 'actions', items: [{ label: zh ? '立即刷新' : 'Refresh', action: 'refresh', icon: 'refresh' }] },
               ] },
