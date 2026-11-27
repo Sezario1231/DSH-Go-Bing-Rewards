@@ -205,6 +205,14 @@ export function apply(ctx) {
     ctx.dshGo.panel('points-board', {
       view: (scope, caps) => {
         const zh = !String(caps?.locale || '').startsWith('en')
+        // 按实际账号数生成抽屉：有几个账号就放几个；label 用静态编号，App 才能正确渲染
+        const accts = readAccounts().filter((a) => a.active)
+        const drawers = accts.map((a) => ({
+          label: `账号${a.index}`,
+          children: [
+            { type: 'keyValue', items: { $: `data.kv_${a.index}` } },
+          ],
+        }))
         return {
           v: 2, type: 'stack', title: zh ? '积分明细' : 'Points', accent: 'app',
           style: { card: 'surface', gap: 'M', padding: 'M' },
@@ -232,17 +240,8 @@ export function apply(ctx) {
               { type: 'metric', label: zh ? '总余额' : 'Balance', value: { $: 'data.totalBal' }, caption: zh ? '两账号合计' : 'both accounts' },
             ] },
 
-            // 账号抽屉：点邮箱行展开详情，避免每个账号占两大块
-            { type: 'accordion', items: [
-              { label: zh ? '账号一 · 点击展开明细' : 'Account 1 · tap for details', children: [
-                { type: 'text', text: { $: 'data.a0name' }, style: { size: 'caption', weight: 'semibold' } },
-                { type: 'keyValue', items: { $: 'data.a0kv' } },
-              ] },
-              { label: zh ? '账号二 · 点击展开明细' : 'Account 2 · tap for details', children: [
-                { type: 'text', text: { $: 'data.a1name' }, style: { size: 'caption', weight: 'semibold' } },
-                { type: 'keyValue', items: { $: 'data.a1kv' } },
-              ] },
-            ] },
+            // 账号抽屉：有几个账号放几个，点开看明细；展开后不再显示邮箱
+            { type: 'accordion', items: drawers },
 
             // 分组明细
             { type: 'accordion', expanded: true, items: [
@@ -305,6 +304,10 @@ export function apply(ctx) {
             : (zh ? `并行（最多 ${d.clusters} 个）` : `Parallel (${d.clusters})`)
           d.removeOptions = (d.accounts || []).filter((a) => a.active)
             .map((a) => ({ label: `${a.index} · ${a.email}`, value: a.index }))
+          // 抽屉明细按账号编号绑定：1→首账号，2→次账号，其余暂无日志数据
+          for (const a of (d.accounts || [])) {
+            d[`kv_${a.index}`] = a.index === '1' ? d.a0kv : a.index === '2' ? d.a1kv : []
+          }
           emit(d)
         }
         tick()
