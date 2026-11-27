@@ -285,20 +285,18 @@ dsh plugin --profile web add /root/workspace/DSH-Go-Bing-Rewards/dsh-plugin/loca
 
 > 注意：本插件读取的是本机脚本（`scripts/local/*.sh`）和日志（`logs/cron-*.log`）。要先按「快速开始 / 部署」章节配好 `.env` 并跑过一次，面板才会显示数据。首次运行的手动登录、2FA、验证码仍需在手机浏览器里完成。
 
-#### 账号增删与串并行切换
+#### 账号管理与串并行切换
 
-面板「积分明细 → 账号管理」提供了三个操作，也可在终端执行（详见 [ACCOUNT_MANAGE.md](ACCOUNT_MANAGE.md)）：
+面板「积分明细 → 账号管理」只提供**串行 / 并行切换**按钮（简单可靠）：
 
 ```bash
-bash scripts/local/account-remove.sh 2      # 删除账号 2：注释 .env 中 ACCOUNT_2_* 整组，自动备份，凭证不读取不输出
 bash scripts/local/parallel-set.sh 2        # clusters=2 最多 2 账号同时跑；1=串行
 ```
 
-- **删除**：只给 `.env` 对应行加 `#` 注释，原文件备份为 `.env.bak.*`，至少保留 1 个账号。
 - **串并行**：`clusters=1` 串行（账号逐个跑，间隔 `accountDelay`），`clusters=N` 最多 N 个同时跑；建议并行 ≤ 3、账号总数 ≤ 6，配置备份为 `config.json.bak.*`。
-- **添加账号**：面板不提供添加按钮；需要新增账号时直接在 `.env` 里按 `env.example` 格式加一组 `ACCOUNT_N_*`，并手动完成首次登录（会话存 `sessions.db` 自动复用）。高级用户也可用 `scripts/local/account-add.sh` + `login-ctl.sh` 辅助浏览器登录，详见 [ACCOUNT_MANAGE.md](ACCOUNT_MANAGE.md)。
+- **增删账号**：面板不提供添加/删除按钮。需要增删账号时，直接在 `.env` 里按 `env.example` 格式加/注释一组 `ACCOUNT_N_*`（改前先备份），并完成首次登录；会话存 `sessions.db` 后日常自动复用。
 
-以上操作都只改 `.env` / `config.json`，下次启动生效。
+下次启动生效。高级辅助脚本见 [ACCOUNT_MANAGE.md](ACCOUNT_MANAGE.md)。
 
 ---
 

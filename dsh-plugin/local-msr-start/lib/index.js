@@ -14,7 +14,6 @@ const POINTS = join(REPO, 'scripts/local/points-json.sh')
 const SUMMARY = join(REPO, 'scripts/local/points-summary.sh')
 const HEALTH = join(REPO, 'scripts/local/health-json.sh')
 const ACCOUNTS = join(REPO, 'scripts/local/accounts-list.sh')
-const ACCOUNT_REMOVE = join(REPO, 'scripts/local/account-remove.sh')
 const PARALLEL_SET = join(REPO, 'scripts/local/parallel-set.sh')
 
 const STATUS = { done: ['已完成', 'good'], running: ['运行中', 'info'], pending: ['未开始', 'muted'] }
@@ -272,9 +271,7 @@ export function apply(ctx) {
                 { type: 'keyValue', items: [
                   [zh ? '运行模式' : 'Mode', { $: 'data.modeText' }],
                 ] },
-                { type: 'table', columns: [zh ? '编号' : 'No.', zh ? '邮箱' : 'Email', zh ? '状态' : 'State'], rows: { $: 'data.accountTable' } },
-                { type: 'text', text: zh ? '选择账号删除（配置自动备份，可恢复）' : 'Select an account to remove (backed up)', style: { size: 'caption' }, tone: 'muted' },
-                { type: 'options', id: 'remove-account', options: { $: 'data.removeOptions' } },
+                { type: 'table', columns: [zh ? '编号' : 'No.', zh ? '邮箱' : 'Email'], rows: { $: 'data.accountTable' } },
                 { type: 'actions', items: [
                   { label: '串行', action: 'set-parallel', args: { n: 1 } },
                   { label: '并行 2', action: 'set-parallel', args: { n: 2 } },
@@ -293,17 +290,13 @@ export function apply(ctx) {
       data: (scope, emit, caps) => {
         const tick = () => {
           const d = readPoints()
-          const zh = !String(caps?.locale || '').startsWith('en')
-          d.accountTable = (d.accounts || []).map((a) => [
+          d.accountTable = (d.accounts || []).filter((a) => a.active).map((a) => [
             a.index,
             a.email || '—',
-            a.active ? (zh ? '启用' : 'on') : (zh ? '已删除' : 'off'),
           ])
           d.modeText = d.clusters <= 1
-            ? (zh ? '串行（逐个运行）' : 'Serial')
-            : (zh ? `并行（最多 ${d.clusters} 个）` : `Parallel (${d.clusters})`)
-          d.removeOptions = (d.accounts || []).filter((a) => a.active)
-            .map((a) => ({ label: `${a.index} · ${a.email}`, value: a.index }))
+            ? '串行（逐个运行）'
+            : `并行（最多 ${d.clusters} 个）`
           // 抽屉明细按账号编号绑定：1→首账号，2→次账号，其余暂无日志数据
           for (const a of (d.accounts || [])) {
             d[`kv_${a.index}`] = a.index === '1' ? d.a0kv : a.index === '2' ? d.a1kv : []
@@ -330,16 +323,6 @@ export function apply(ctx) {
             return { refresh: true, toast: (out || '').trim().slice(0, 60) || '已停止' }
           } catch {
             return { refresh: true, toast: '停止失败，请手动检查' }
-          }
-        },
-        'remove-account': (_scope, event) => {
-          const idx = String(event?.value ?? event?.args?.index ?? '')
-          if (!/^\d+$/.test(idx)) return { toast: '请选择要删除的账号' }
-          try {
-            execFileSync('bash', [ACCOUNT_REMOVE, idx], { encoding: 'utf8', timeout: 10000 })
-            return { refresh: true, toast: `已删除账号 ${idx}（配置已备份）` }
-          } catch (err) {
-            return { toast: `删除失败：${String(err?.stderr || err?.message || '').slice(0, 40)}` }
           }
         },
         'set-parallel': (_scope, event) => {
