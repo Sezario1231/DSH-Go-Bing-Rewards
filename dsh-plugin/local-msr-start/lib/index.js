@@ -99,6 +99,25 @@ function readPoints() {
     const h = readHealth()
     const hIcon = { done: '✅', running: '⏳', interrupted: '⚠️', missed: '🔴', pending: '🕒' }[h.status] || 'ℹ️'
 
+    // 两账号对比卡（原生 compare 风格）
+    const cmpItem = (a, label) => ({
+      title: label,
+      rows: [
+        ['余额', fmt(num(a, 'now'))],
+        ['今日', `+${fmt(num(a, 'today'))}`],
+        ['搜索', `+${fmt(num(a, 'search'))}`],
+        ['阅读', `+${fmt(num(a, 'read'))}`],
+        ['签到', `+${fmt(num(a, 'checkin'))}`],
+      ],
+    })
+    const compareItems = [cmpItem(a0, nz(a0.account) || '账号一'), cmpItem(a1, nz(a1.account) || '账号二')]
+
+    // 风控徽标：任一项 >0 显示 warn，否则 good
+    const rkBadge = (arr) => {
+      const risky = arr.some((row) => Array.isArray(row) && Number(row[1]) > 0)
+      return { text: risky ? '有信号（仅记录）' : '正常', tone: risky ? 'warn' : 'good' }
+    }
+
     return {
       date: d.date || '',
       totalToday: fmt(totalToday),
@@ -117,11 +136,16 @@ function readPoints() {
       healthText: `${hIcon} ${h.label}`,
       healthTone: h.tone || 'muted',
       healthDetail: h.detail || '',
+      compareItems,
+      riskBadge0: rkBadge(risk0),
+      riskBadge1: rkBadge(risk1),
       updated: new Date().toLocaleTimeString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }),
     }
   } catch {
     return { date: '', totalToday: '—', totalBal: '—', a0kv: [], a1kv: [], rows: [],
-      healthText: 'ℹ️ 状态未知', healthTone: 'muted', healthDetail: '健康检测读取失败', updated: '读取失败' }
+      healthText: 'ℹ️ 状态未知', healthTone: 'muted', healthDetail: '健康检测读取失败',
+      compareItems: [], riskBadge0: { text: '—', tone: 'muted' }, riskBadge1: { text: '—', tone: 'muted' },
+      updated: '读取失败' }
   }
 }
 
@@ -159,46 +183,70 @@ export function apply(ctx) {
       view: (scope, caps) => {
         const zh = !String(caps?.locale || '').startsWith('en')
         return {
-          v: 2, type: 'stack', title: zh ? '积分明细' : 'Points', accent: 'teal',
+          v: 2, type: 'stack', title: zh ? '积分明细' : 'Points', accent: 'app',
+          style: { card: 'surface', gap: 'M', padding: 'M' },
           children: [
-            { type: 'text', text: { $: 'data.date' }, style: { size: 'caption' } },
-            { type: 'callout', text: { $: 'data.healthText' }, tone: { $: 'data.healthTone' } },
-            { type: 'text', text: { $: 'data.healthDetail' }, style: { size: 'caption' } },
+            // 顶部：标题 + 日期
+            { type: 'text', text: zh ? 'Bing 积分面板' : 'Bing Rewards', style: { size: 'title', weight: 'bold' } },
+            { type: 'text', text: { $: 'data.date' }, style: { size: 'caption' }, tone: 'muted' },
+
+            // 健康卡（tinted，跟随状态色）
+            { type: 'stack', style: { card: 'tinted', gap: 'S', padding: 'M' }, children: [
+              { type: 'text', text: { $: 'data.healthText' }, style: { size: 'subtitle', weight: 'semibold' } },
+              { type: 'text', text: { $: 'data.healthDetail' }, style: { size: 'caption' }, tone: 'muted' },
+            ] },
+
+            // 操作按钮
             { type: 'actions', items: [
               { label: zh ? '启动积分' : 'Start', action: 'start', icon: 'play' },
               { label: zh ? '停止' : 'Stop', action: 'stop', icon: 'stop' },
               { label: zh ? '刷新' : 'Refresh', action: 'refresh', icon: 'refresh' },
             ] },
-            { type: 'row', children: [
-              { type: 'metric', label: zh ? '今日新增' : 'Today', value: { $: 'data.totalToday' }, tone: 'good' },
-              { type: 'metric', label: zh ? '总余额' : 'Balance', value: { $: 'data.totalBal' } },
+
+            // 总览
+            { type: 'stack', style: { card: 'surface', gap: 'M', padding: 'M', dividers: true }, children: [
+              { type: 'metric', label: zh ? '今日新增' : 'Today', value: { $: 'data.totalToday' }, tone: 'good', caption: zh ? '两账号合计' : 'both accounts' },
+              { type: 'metric', label: zh ? '总余额' : 'Balance', value: { $: 'data.totalBal' }, caption: zh ? '两账号合计' : 'both accounts' },
             ] },
+
+            // 分组明细
             { type: 'accordion', expanded: true, items: [
-              { label: zh ? '📊 账号一' : '📊 Account 1', children: [
-                { type: 'keyValue', items: { $: 'data.a0kv' } },
+              { label: zh ? '📊 账号对比' : '📊 Accounts', children: [
+                { type: 'compare', items: { $: 'data.compareItems' } },
+                { type: 'stack', style: { card: 'outlined', gap: 'S', padding: 'M' }, children: [
+                  { type: 'text', text: { $: 'data.a0name' }, style: { size: 'caption', weight: 'semibold' } },
+                  { type: 'keyValue', items: { $: 'data.a0kv' } },
+                ] },
+                { type: 'stack', style: { card: 'outlined', gap: 'S', padding: 'M' }, children: [
+                  { type: 'text', text: { $: 'data.a1name' }, style: { size: 'caption', weight: 'semibold' } },
+                  { type: 'keyValue', items: { $: 'data.a1kv' } },
+                ] },
               ] },
-              { label: zh ? '📊 账号二' : '📊 Account 2', children: [
-                { type: 'keyValue', items: { $: 'data.a1kv' } },
-              ] },
-              { label: zh ? '📋 最近得分明细' : '📋 Recent points', children: [
+              { label: zh ? '📋 最近得分' : '📋 Recent points', children: [
                 { type: 'table', columns: [zh ? '时间' : 'Time', zh ? '账号' : 'Account', zh ? '项目' : 'Item', zh ? '得分' : 'Pts', zh ? '余额' : 'Bal'], rows: { $: 'data.rows' } },
               ] },
-              { label: zh ? '📅 近几天日明细' : '📅 Daily', children: [
+              { label: zh ? '📅 近几天' : '📅 Daily', children: [
                 { type: 'table', columns: [zh ? '日期' : 'Date', zh ? '账号' : 'Account', zh ? '新增' : 'Gain', zh ? '搜/读/签' : 'S/R/C', zh ? '错' : 'Err'], rows: { $: 'data.dayRows' } },
-                { type: 'text', text: zh ? '分类为日志统计，仅供参考；新增以余额差为准' : 'Categories from logs; gain = balance diff', style: { size: 'caption' } },
+                { type: 'text', text: zh ? '分类为日志统计，仅供参考；新增以余额差为准' : 'Categories from logs; gain = balance diff', style: { size: 'caption' }, tone: 'muted' },
               ] },
               { label: zh ? '🗓️ 月明细' : '🗓️ Monthly', children: [
                 { type: 'table', columns: [zh ? '月份' : 'Month', zh ? '账号' : 'Account', zh ? '新增' : 'Gain', zh ? '搜/读/签' : 'S/R/C'], rows: { $: 'data.monthRows' } },
               ] },
               { label: zh ? '🛡️ 风控情况' : '🛡️ Risk', children: [
-                { type: 'text', text: zh ? '账号一' : 'Account 1', style: { size: 'caption' } },
+                { type: 'row', children: [
+                  { type: 'text', text: zh ? '账号一' : 'Account 1', style: { size: 'caption', weight: 'semibold' } },
+                  { type: 'text', text: { $: 'data.riskBadge0.text' }, tone: { $: 'data.riskBadge0.tone' }, style: { size: 'caption' } },
+                ] },
                 { type: 'keyValue', items: { $: 'data.risk0' } },
-                { type: 'text', text: zh ? '账号二' : 'Account 2', style: { size: 'caption' } },
+                { type: 'row', children: [
+                  { type: 'text', text: zh ? '账号二' : 'Account 2', style: { size: 'caption', weight: 'semibold' } },
+                  { type: 'text', text: { $: 'data.riskBadge1.text' }, tone: { $: 'data.riskBadge1.tone' }, style: { size: 'caption' } },
+                ] },
                 { type: 'keyValue', items: { $: 'data.risk1' } },
-                { type: 'text', text: zh ? '仅记录，不阻断自动运行' : 'Record only; never blocks automation', style: { size: 'caption' } },
+                { type: 'text', text: zh ? '仅记录，不阻断自动运行' : 'Record only; never blocks automation', style: { size: 'caption' }, tone: 'muted' },
               ] },
               { label: zh ? '⚙️ 运行状态' : '⚙️ Status', children: [
-                { type: 'text', text: { $: 'data.updated' }, style: { size: 'caption' } },
+                { type: 'text', text: { $: 'data.updated' }, style: { size: 'caption' }, tone: 'muted' },
                 { type: 'actions', items: [{ label: zh ? '立即刷新' : 'Refresh', action: 'refresh', icon: 'refresh' }] },
               ] },
             ] },
